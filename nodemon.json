@@ -1,0 +1,8 @@
+{
+  "ignore": [
+    "src/generated-tests/*",
+    "src/artifacts/*",
+    "src/reports/*",
+    "src/logs/*"
+  ]
+}
