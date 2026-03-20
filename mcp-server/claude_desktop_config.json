@@ -1,0 +1,18 @@
+{
+  "_comment": "Paste this into your Claude Desktop config file.",
+  "_windows_path": "%APPDATA%\\Claude\\claude_desktop_config.json",
+  "_mac_path": "~/Library/Application Support/Claude/claude_desktop_config.json",
+
+  "mcpServers": {
+    "playwright-tests": {
+      "command": "node",
+      "args": [
+        "C:/CHANGE/THIS/PATH/TO/mcp-server/src/index.js",
+        "--transport=stdio"
+      ],
+      "env": {
+        "BACKEND_URL": "http://localhost:5000"
+      }
+    }
+  }
+}
