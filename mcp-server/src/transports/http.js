@@ -11,7 +11,7 @@ import express from 'express';
 import { randomUUID } from 'crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { registerTools } from '../toolDefinitions.js';
+import { registerTools } from '../tooldefinitions.js';
 
 const PORT = parseInt(process.env.MCP_HTTP_PORT || '3100', 10);
 

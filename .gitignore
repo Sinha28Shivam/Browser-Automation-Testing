@@ -1,1 +1,18 @@
-.node_modules/
+# Dependencies
+node_modules/
+mcp-server/node_modules/
+
+# Environment variables
+.env
+mcp-server/.env
+
+# Logs
+*.log
+npm-debug.log*
+
+# Runtime
+runtime/
+
+# OS files
+.DS_Store
+Thumbs.db
