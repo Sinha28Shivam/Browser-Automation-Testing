@@ -1,0 +1,13 @@
+# Backend server
+PORT=5000
+NODE_ENV=development
+
+# Azure AI Foundry (used for test generation AND failure analysis)
+# Get these from: https://ai.azure.com → your project → Keys & Endpoints
+AZURE_INFERENCE_ENDPOINT=https://<your-resource>.services.ai.azure.com/models
+AZURE_INFERENCE_KEY=<your-key>
+AZURE_MODEL_NAME=Meta-Llama-3.3-70B-Instruct
+
+# Set to "true" to run Playwright with a visible browser window (local debugging only)
+# Leave unset or "false" for headless mode (servers, CI, Docker)
+PLAYWRIGHT_HEADED=false

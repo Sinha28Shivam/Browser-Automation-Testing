@@ -1,13 +1,5 @@
 import { logInfo, logError } from '../../utils/logger.js';
 
-// ─────────────────────────────────────────────
-// Azure AI Foundry — GitHub Models / Llama endpoint
-// Set these in your backend .env:
-//   AZURE_INFERENCE_ENDPOINT=https://<your-resource>.services.ai.azure.com/models
-//   AZURE_INFERENCE_KEY=<your-key>
-//   AZURE_MODEL_NAME=Meta-Llama-3.3-70B-Instruct   (or whichever you subscribed to)
-// ─────────────────────────────────────────────
-
 const ENDPOINT   = process.env.AZURE_INFERENCE_ENDPOINT;
 const API_KEY    = process.env.AZURE_INFERENCE_KEY;
 const MODEL_NAME = process.env.AZURE_MODEL_NAME || 'Llama-3.3-70B-Instruct';
@@ -27,7 +19,11 @@ Rules you MUST follow:
 5. Use the exact selectors provided. If none are provided, use sensible defaults.
 6. Assertions must be realistic — check URL patterns, visible text, or element visibility.
 7. Never hard-code credentials that differ from what the scenario describes.
-8. The test.describe label must match the title provided.`;
+8. The test.describe label must match the title provided.
+9. IMPORTANT: When using CSS attribute selectors inside page.fill() or page.locator(),
+   use double quotes for the attribute value to avoid breaking the surrounding string.
+   Example of CORRECT syntax:  await page.fill('input[name="q"]', 'search term');
+   Example of WRONG syntax:    await page.fill('input[name='q']', 'search term');`;
 
 function buildUserPrompt({ url, title, scenario, selectors, testId }) {
     const selectorBlock = selectors
@@ -46,12 +42,13 @@ Test ID (use in screenshot paths): ${testId}
 Selectors:
 ${selectorBlock}
 
+REMINDER: In CSS attribute selectors inside JS strings, always use double quotes for attribute values.
+Correct:   page.fill('input[name="q"]', value)
+Incorrect: page.fill('input[name='q']', value)
+
 Output ONLY the JavaScript file content.`;
 }
 
-// ─────────────────────────────────────────────
-// Call Azure AI Foundry (OpenAI-compatible chat endpoint)
-// ─────────────────────────────────────────────
 async function callAzureLlama(messages) {
     if (!ENDPOINT || !API_KEY) {
         throw new Error(
@@ -60,9 +57,7 @@ async function callAzureLlama(messages) {
         );
     }
 
-    // Azure AI Foundry exposes an OpenAI-compatible endpoint
     const url = `${ENDPOINT.replace(/\/$/, '')}/chat/completions`;
-
     logInfo(`Calling Azure AI Foundry: ${url} (model: ${MODEL_NAME})`);
 
     const response = await fetch(url, {
@@ -70,13 +65,12 @@ async function callAzureLlama(messages) {
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${API_KEY}`,
-            // Azure AI Foundry also accepts api-key header as fallback
             'api-key': API_KEY,
         },
         body: JSON.stringify({
             model: MODEL_NAME,
             messages,
-            temperature: 0.2,       // low temperature = more deterministic code
+            temperature: 0.2,
             max_tokens: 4096,
             top_p: 0.95,
         }),
@@ -97,9 +91,6 @@ async function callAzureLlama(messages) {
     return content;
 }
 
-// ─────────────────────────────────────────────
-// Strip markdown fences the model may add
-// ─────────────────────────────────────────────
 function stripFences(raw) {
     return raw
         .replace(/^```[\w]*\n?/m, '')
@@ -107,9 +98,15 @@ function stripFences(raw) {
         .trim();
 }
 
-// ─────────────────────────────────────────────
-// Main export — called by test.workflow.js
-// ─────────────────────────────────────────────
+/**
+ * Fix unescaped single quotes inside attribute selectors.
+ * Converts: page.fill('input[name='q']'  →  page.fill('input[name="q"]'
+ */
+function fixAttributeSelectors(script) {
+    // Match CSS attribute selectors like [name='value'] and replace inner quotes with double
+    return script.replace(/\[(\w+)='([^']+)'\]/g, '[$1="$2"]');
+}
+
 export const generateTestScript = async ({ url, scenario, selectors, title }, testId) => {
     logInfo(`Generating test script via Azure AI Foundry for testId: ${testId}`);
 
@@ -120,7 +117,10 @@ export const generateTestScript = async ({ url, scenario, selectors, title }, te
         ];
 
         const raw = await callAzureLlama(messages);
-        const script = stripFences(raw);
+        let script = stripFences(raw);
+
+        // Safety net: fix any attribute selectors the model got wrong
+        script = fixAttributeSelectors(script);
 
         logInfo(`Test script generated (${script.length} chars)`);
         return script;
@@ -132,16 +132,15 @@ export const generateTestScript = async ({ url, scenario, selectors, title }, te
     }
 };
 
-// ─────────────────────────────────────────────
-// Fallback: template used if Azure AI is down
-// ─────────────────────────────────────────────
 function fallbackTemplate({ url, title, selectors, testId }) {
-    const targetUrl   = url        || 'https://example.com';
-    const userSel     = selectors?.username || '#username';
-    const passSel     = selectors?.password || '#password';
-    const btnSel      = selectors?.submit   || '#submit';
-    const suiteTitle  = title      || 'Generated Test Suite';
+    const targetUrl  = url       || 'https://example.com';
+    // Use double quotes inside attribute selectors to avoid JS string breakage
+    const userSel    = selectors?.username || '#username';
+    const passSel    = selectors?.password || '#password';
+    const btnSel     = selectors?.submit   || '#submit';
+    const suiteTitle = title               || 'Generated Test Suite';
 
+    // Use template literals so we never have quote-escaping issues
     return `import { test, expect } from '@playwright/test';
 
 test.describe('${suiteTitle}', () => {

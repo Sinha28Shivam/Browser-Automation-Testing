@@ -2,6 +2,9 @@ import { successResponse } from "../utils/responseFormatter.js";
 import { logInfo } from "../utils/logger.js";
 import { createTestWorkflow  } from "../workflows/test.workflow.js";
 import { runTestWorkflow } from "../workflows/run.workflow.js";
+// import { report, stderr, stdout } from "process";
+
+const executionLogs = new Map();
 
 export const createTest = async (req, res, next) => {
     try {
@@ -19,17 +22,30 @@ export const createTest = async (req, res, next) => {
 
 export const runTest = async (req, res, next) => {
     try {
-        const { filePath, testId } = req.body;
+        const { filepPath, testId } = req.body;
 
-        const result = await runTestWorkflow(filePath, testId);
+        if(!filepPath || !testId) {
+            return res.status(400).json({ 
+                success: false,
+                message: 'FIlepath and testId are required'
+            });
+        }
+
+        const result = await runTestWorkflow(filepPath, testId);
+
+        executionLogs.set(testId, {
+            report: result.report,
+            stdout: result.execution?.stdout || '';
+            stderr: result.execution?.stderr || '';
+        });
 
         return res.status(200).json(
             successResponse('Test execution completed', result)
-        )
+        );
     }catch(error){
         next(error);
     }
-}
+};
 
 export const getReport = async (req, res, next) => {
     try {
@@ -48,11 +64,12 @@ export const getReport = async (req, res, next) => {
             });
         }
  
-        const text = [
+         const text = [
             `=== Report for ${testId} ===`,
-            `Status:  ${log.report?.status}`,
-            `Total:   ${log.report?.totalTests}`,
-            `Failed:  ${log.report?.failedTests}`,
+            `Status:  ${log.report?.status ?? 'UNKNOWN'}`,
+            `Total:   ${log.report?.totalTests ?? 0}`,
+            `Failed:  ${log.report?.failedTests ?? 0}`,
+            `Skipped: ${log.report?.skippedTests ?? 0}`,
             ``,
             `=== STDOUT ===`,
             log.stdout || '(empty)',
@@ -66,4 +83,3 @@ export const getReport = async (req, res, next) => {
         next(error);
     }
 };
- 
