@@ -1,43 +1,67 @@
 import { successResponse } from "../utils/responseFormatter.js";
 import { logInfo, logError } from "../utils/logger.js";
-// import { createTestWorkflow  } from "../workflows/test.workflow.js";
 import { runTestWorkflow } from "../workflows/run.workflow.js";
-import fs from 'fs';
+import { createTestMetadata} from "../services/testMetadata.service.js";
+import { writeTestFile } from "../services/file/fileWriter.service.js";
 import { generateTestScript } from "../services/ai/generateTest.service.js";
 // import { report, stderr, stdout } from "process";
 
 const executionLogs = new Map();
 
-export async function createTest(req, res) {
+export async function createTest(req, res, next) {
     try {
-        const { url, description } = req.body;
-        if (!url) return res.status(400).json({ error: 'URL is required' });
+        const { url, title, scenario, description, selectors } = req.body;
+ 
+        if (!url) {
+            return res.status(400).json({ success: false, message: 'URL is required' });
+        }
  
         logInfo('Received test creation request');
  
-        const testId = Date.now().toString();
-        const filePath = `runtime/generated-tests/${testId}.spec.js`;
- 
-        // FIX: Pass the arguments as the single object that the service expects
+        // Build a normalised payload — support both payload shapes
         const payload = {
-            url: url,
-            scenario: description,
-            title: "Generated Test",
-            selectors: {} 
+            url,
+            title:     title    || 'Generated Test Suite',
+            scenario:  scenario || description || 'Test the page',
+            selectors: selectors || {},
         };
-        
+ 
+        // 1. Create metadata (generates testId)
+        const metadata = await createTestMetadata(payload);
+        const { testId } = metadata;
+ 
+        logInfo(`testId: ${testId}`);
+ 
+        // 2. Generate script via Azure AI
         const scriptContent = await generateTestScript(payload, testId);
  
-        // Now 'fs' will work properly
-        fs.mkdirSync('runtime/generated-tests', { recursive: true });
-        fs.writeFileSync(filePath, scriptContent);
+        // 3. Persist to disk  (uses PATHS.GENERATED_TESTS constant)
+        const file = await writeTestFile(testId, scriptContent);
+        logInfo(`Test script saved: ${file.filePath}`);
  
-        logInfo(`Test script saved: ${filePath}`);
+        // 4. ✅ Auto-run Playwright immediately after generation
+        logInfo(`Auto-running Playwright for testId: ${testId}`);
+        const result = await runTestWorkflow(file.filePath, testId);
  
-        return res.status(200).json({ testId, filePath, message: 'Test script generated successfully' });
+        // 5. Cache execution logs for /api/test/report
+        executionLogs.set(testId, {
+            report: result.report,
+            stdout: result.execution?.stdout || '',
+            stderr: result.execution?.stderr || '',
+        });
+ 
+        return res.status(200).json(
+            successResponse('Test generated and executed', {
+                testId,
+                status:  metadata.status,
+                file,
+                report:  result.report,
+                git:     result.git,
+            })
+        );
     } catch (err) {
         logError(`createTest error: ${err.message}`);
-        return res.status(500).json({ error: err.message });
+        next(err);
     }
 }
 
