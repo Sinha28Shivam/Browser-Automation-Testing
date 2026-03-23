@@ -1,48 +1,59 @@
 import { successResponse } from "../utils/responseFormatter.js";
-import { logInfo } from "../utils/logger.js";
-import { createTestWorkflow  } from "../workflows/test.workflow.js";
+import { logInfo, logError } from "../utils/logger.js";
+// import { createTestWorkflow  } from "../workflows/test.workflow.js";
 import { runTestWorkflow } from "../workflows/run.workflow.js";
 // import { report, stderr, stdout } from "process";
 
 const executionLogs = new Map();
 
-export const createTest = async (req, res, next) => {
+export async function createTest(req, res) {
     try {
-
+        const { url, description } = req.body;
+        if (!url) return res.status(400).json({ error: 'URL is required' });
+ 
         logInfo('Received test creation request');
-        const result = await createTestWorkflow (req.body);
-
-        return res.status(200).json(
-            successResponse('Test request received', result)
-        );
-    }catch(error){
-        next(error);
+ 
+        const testId = Date.now().toString();
+        const filePath = `runtime/generated-tests/${testId}.spec.js`;
+ 
+        const scriptContent = await generateTestScript(url, description, testId);
+ 
+        fs.mkdirSync('runtime/generated-tests', { recursive: true });
+        fs.writeFileSync(filePath, scriptContent);
+ 
+        logInfo(`Test script saved: ${filePath}`);
+ 
+        return res.status(200).json({ testId, filePath, message: 'Test script generated successfully' });
+    } catch (err) {
+        logError(`createTest error: ${err.message}`);
+        return res.status(500).json({ error: err.message });
     }
-};
+}
 
 export const runTest = async (req, res, next) => {
     try {
-        const { filepPath, testId } = req.body;
+        const { filePath, testId } = req.body;
 
-        if(!filepPath || !testId) {
+        if(!filePath || !testId) {
             return res.status(400).json({ 
                 success: false,
-                message: 'FIlepath and testId are required'
+                message: 'FilePath and testId are required'
             });
         }
 
-        const result = await runTestWorkflow(filepPath, testId);
+        const result = await runTestWorkflow(filePath, testId);
 
         executionLogs.set(testId, {
             report: result.report,
-            stdout: result.execution?.stdout || '';
-            stderr: result.execution?.stderr || '';
+            stdout: result.execution?.stdout || '',
+            stderr: result.execution?.stderr || ''
         });
 
         return res.status(200).json(
             successResponse('Test execution completed', result)
         );
     }catch(error){
+        logError(`runTest error: ${error.message}`);
         next(error);
     }
 };

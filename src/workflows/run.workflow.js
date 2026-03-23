@@ -1,34 +1,35 @@
 import { runPlaywrightTest } from '../services/execution/playwrightRunner.service.js';
 import { parseExecutionReport } from '../services/reportParser.service.js';
-import { commitGeneratedTest } from '../services/github/githubCommit.service.js';
-import { createArtifactFolder } from '../services/file/artifactFolder.service.js';
-
-// Use the same Azure AI Foundry / Llama service used for generation —
-// NOT the separate Azure OpenAI service (claudeAnalyzer.service.js uses
-// different env vars: AZURE_OPENAI_ENDPOINT / AZURE_OPENAI_API_KEY)
 import { analyzeFailure } from '../services/ai/failureAnalyzer.service.js';
+import { commitGeneratedTest } from '../services/github/githubCommit.service.js';
+import {logInfo, logError} from '../utils/logger.js';
 
-export const runTestWorkflow = async (filePath, testId) => {
-    createArtifactFolder(testId);
+export async function runTestWorkflow(filePath, testId) {
+    logInfo(`Starting test workflow for testId: ${testId}`);
 
-    const execution = await runPlaywrightTest(filePath);
-    const report    = parseExecutionReport(execution.stdout);
+    const execution = await runPlaywrightTest(filePath, testId);
+    const report = parseExecutionReport(execution.stdout);
 
-    let git       = null;
-    let aiAnalysis = null;
+    logInfo(`Test result: ${report.totalTests} total, ${report.failedTests} failed`);
 
-    if (report.status === 'PASSED') {
-        git = await commitGeneratedTest(filePath, testId);
+    if (report.failedTests === 0 && report.totalTests > 0) {
+        try {
+            await commitGeneratedTest(filePath, testId);
+            logInfo(`Test passed and committed to GitHub: ${testId}`);
+        } catch (err) {
+            logError(`GitHub push failed: ${err.message}`);
+        }
     }
 
-    if (report.status === 'FAILED') {
-        aiAnalysis = await analyzeFailure(report, `runtime/artifacts/${testId}`, execution.stderr);
+    if (report.failedTests > 0) {
+        try {
+            const analysis = await analyzeFailure(report, execution.stderr);
+            report.aiAnalysis = analysis;
+        } catch (err) {
+            logError(`AI analysis failed: ${err.message}`);
+            report.aiAnalysis = 'Analysis unavailable.';
+        }
     }
 
-    return {
-        execution,
-        report,
-        git,
-        aiAnalysis,
-    };
-};
+    return { report, execution };
+}
