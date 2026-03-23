@@ -57,14 +57,14 @@ async function callAzureLlama(messages) {
         );
     }
 
-    const url = `${ENDPOINT.replace(/\/$/, '')}/chat/completions`;
+    const url = `${ENDPOINT.replace(/\/$/, '')}/openai/deployments/${MODEL_NAME}/chat/completions?api-version=2024-06-01`;
     logInfo(`Calling Azure AI Foundry: ${url} (model: ${MODEL_NAME})`);
 
     const response = await fetch(url, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${API_KEY}`,
+            // 'Authorization': `Bearer ${API_KEY}`,
             'api-key': API_KEY,
         },
         body: JSON.stringify({

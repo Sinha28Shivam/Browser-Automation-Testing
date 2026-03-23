@@ -2,6 +2,8 @@ import { successResponse } from "../utils/responseFormatter.js";
 import { logInfo, logError } from "../utils/logger.js";
 // import { createTestWorkflow  } from "../workflows/test.workflow.js";
 import { runTestWorkflow } from "../workflows/run.workflow.js";
+import fs from 'fs';
+import { generateTestScript } from "../services/ai/generateTest.service.js";
 // import { report, stderr, stdout } from "process";
 
 const executionLogs = new Map();
@@ -16,8 +18,17 @@ export async function createTest(req, res) {
         const testId = Date.now().toString();
         const filePath = `runtime/generated-tests/${testId}.spec.js`;
  
-        const scriptContent = await generateTestScript(url, description, testId);
+        // FIX: Pass the arguments as the single object that the service expects
+        const payload = {
+            url: url,
+            scenario: description,
+            title: "Generated Test",
+            selectors: {} 
+        };
+        
+        const scriptContent = await generateTestScript(payload, testId);
  
+        // Now 'fs' will work properly
         fs.mkdirSync('runtime/generated-tests', { recursive: true });
         fs.writeFileSync(filePath, scriptContent);
  
